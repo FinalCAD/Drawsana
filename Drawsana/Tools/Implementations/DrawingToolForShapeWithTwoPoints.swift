@@ -7,7 +7,6 @@
 //
 
 import CoreGraphics
-
 /**
  Base class for tools (rect, line, ellipse) that are drawn by dragging from
  one point to another
@@ -33,18 +32,18 @@ open class DrawingToolForShapeWithTwoPoints: DrawingTool {
 
   public func handleDragStart(context: ToolOperationContext, point: CGPoint) {
     shapeInProgress = makeShape()
-    shapeInProgress?.a = point
-    shapeInProgress?.b = point
+    shapeInProgress?.a = point.shapeRelativePoint(drawingSize: context.drawing.size)
+    shapeInProgress?.b = point.shapeRelativePoint(drawingSize: context.drawing.size)
     shapeInProgress?.apply(userSettings: context.userSettings)
   }
 
   public func handleDragContinue(context: ToolOperationContext, point: CGPoint, velocity: CGPoint) {
-    shapeInProgress?.b = point
+    shapeInProgress?.b = point.shapeRelativePoint(drawingSize: context.drawing.size)
   }
 
   public func handleDragEnd(context: ToolOperationContext, point: CGPoint) {
     guard var shape = shapeInProgress else { return }
-    shape.b = point
+    shape.b = point.shapeRelativePoint(drawingSize: context.drawing.size)
     context.operationStack.apply(operation: AddShapeOperation(shape: shape))
     shapeInProgress = nil
   }
@@ -55,8 +54,8 @@ open class DrawingToolForShapeWithTwoPoints: DrawingTool {
     handleDragEnd(context: context, point: point)
   }
 
-  public func renderShapeInProgress(transientContext: CGContext) {
-    shapeInProgress?.render(in: transientContext)
+  public func renderShapeInProgress(transientContext: CGContext, drawingSize: CGSize) {
+    shapeInProgress?.render(in: transientContext, drawingSize: drawingSize)
   }
 
   public func apply(context: ToolOperationContext, userSettings: UserSettings) {

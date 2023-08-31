@@ -150,13 +150,15 @@ public struct ChangeExplicitWidthOperation: DrawingOperation {
 
   public func apply(drawing: Drawing) {
     shape.explicitWidth = newWidth
-    shape.boundingRect = newBoundingRect
+    shape.origin = newBoundingRect.origin.shapeRelativePoint(drawingSize: drawing.size)
+    shape.size = newBoundingRect.size
     drawing.update(shape: shape)
   }
 
   public func revert(drawing: Drawing) {
     shape.explicitWidth = originalWidth
-    shape.boundingRect = originalBoundingRect
+    shape.origin = originalBoundingRect.origin.shapeRelativePoint(drawingSize: drawing.size)
+    shape.size = newBoundingRect.size
     drawing.update(shape: shape)
   }
 }

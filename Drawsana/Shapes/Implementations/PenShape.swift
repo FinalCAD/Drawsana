@@ -19,7 +19,10 @@ public struct PenLineSegment: Codable, Equatable {
     self.width = width
   }
 
-  public var midPoint: CGPoint {
+  public func midPoint(drawingSize: CGSize) -> CGPoint {
+    let a = a.shapeRenderingPoint(drawingSize: drawingSize)
+    let b = b.shapeRenderingPoint(drawingSize: drawingSize)
+
     return CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
   }
 }
@@ -40,13 +43,16 @@ public class PenShape: Shape, ShapeWithStrokeState, ShapeSelectable {
   public var isEraser: Bool = false
   public var transform: ShapeTransform = .identity
 
-  public var boundingRect: CGRect {
+  public func boundingRect(drawingSize: CGSize) -> CGRect {
+    let start = self.start.shapeRenderingPoint(drawingSize: drawingSize)
+
     var minX = start.x, maxX = start.x
     var minY = start.y, maxY = start.y
     
     for segment in segments {
-      let x = segment.b.x
-      let y = segment.b.y
+      let point = segment.b.shapeRenderingPoint(drawingSize: drawingSize)
+      let x = point.x
+      let y = point.y
       if x < minX { minX = x }
       if x > maxX { maxX = x }
       if y < minY { minY = y }
@@ -96,8 +102,8 @@ public class PenShape: Shape, ShapeWithStrokeState, ShapeSelectable {
     segments.append(segment)
   }
 
-  private func render(in context: CGContext, onlyLast: Bool = false) {
-    transform.begin(context: context)
+  private func render(in context: CGContext, drawingSize: CGSize, onlyLast: Bool = false) {
+    transform.begin(context: context, drawingSize: drawingSize)
     context.saveGState()
     if isEraser {
       context.setBlendMode(.clear)
@@ -107,7 +113,7 @@ public class PenShape: Shape, ShapeWithStrokeState, ShapeSelectable {
       if isFinished {
         // Draw a dot
         context.setFillColor(strokeColor.cgColor)
-        context.addArc(center: start, radius: strokeWidth / 2, startAngle: 0, endAngle: 2 * CGFloat.pi, clockwise: true)
+        context.addArc(center: start.shapeRenderingPoint(drawingSize: drawingSize), radius: strokeWidth / 2, startAngle: 0, endAngle: 2 * CGFloat.pi, clockwise: true)
         context.fillPath()
       } else {
         // draw nothing; user will keep drawing
@@ -130,22 +136,22 @@ public class PenShape: Shape, ShapeWithStrokeState, ShapeSelectable {
       hasStroked = false
       let needsStroke = segment.width != lastWidth
       context.setLineWidth(segment.width)
-      if let previousMid = lastSegment?.midPoint {
-        let currentMid = segment.midPoint
+      if let previousMid = lastSegment?.midPoint(drawingSize: drawingSize) {
+        let currentMid = segment.midPoint(drawingSize: drawingSize)
         context.move(to: previousMid)
-        context.addQuadCurve(to: currentMid, control: segment.a)
+        context.addQuadCurve(to: currentMid, control: segment.a.shapeRenderingPoint(drawingSize: drawingSize))
         // Usually we only draw up to the mid point of the segment, but if the
         // shape is done and this is the last segment, go ahead and draw a line
         // to the end
         if i == segments.count - 1 && isFinished {
-          context.addLine(to: segment.b)
+            context.addLine(to: segment.b.shapeRenderingPoint(drawingSize: drawingSize))
         }
       } else if segments.count == 1 {
-        context.move(to: segment.a)
-        context.addLine(to: segment.b)
+        context.move(to: segment.a.shapeRenderingPoint(drawingSize: drawingSize))
+        context.addLine(to: segment.b.shapeRenderingPoint(drawingSize: drawingSize))
       } else {
-        context.move(to: segment.a)
-        context.addLine(to: segment.midPoint)
+        context.move(to: segment.a.shapeRenderingPoint(drawingSize: drawingSize))
+        context.addLine(to: segment.midPoint(drawingSize: drawingSize))
       }
 
       if needsStroke {
@@ -164,11 +170,11 @@ public class PenShape: Shape, ShapeWithStrokeState, ShapeSelectable {
     transform.end(context: context)
   }
 
-  public func render(in context: CGContext) {
-    render(in: context, onlyLast: false)
+  public func render(in context: CGContext, drawingSize: CGSize) {
+    render(in: context, drawingSize: drawingSize, onlyLast: false)
   }
 
-  public func renderLatestSegment(in context: CGContext) {
-    render(in: context, onlyLast: true)
+  public func renderLatestSegment(in context: CGContext, drawingSize: CGSize) {
+    render(in: context, drawingSize: drawingSize, onlyLast: true)
   }
 }

@@ -36,7 +36,7 @@ public class PenTool: DrawingTool {
     lastVelocity = .zero
     let shape = PenShape()
     shapeInProgress = shape
-    shape.start = point
+    shape.start = point.shapeRelativePoint(drawingSize: context.drawing.size)
     shape.isFinished = false
     shape.apply(userSettings: context.userSettings)
     shape.strokeColor = shape.strokeColor.withAlphaComponent(1)
@@ -52,12 +52,13 @@ public class PenTool: DrawingTool {
         width: shape.strokeWidth,
         velocity: velocity,
         previousVelocity: lastVelocity,
-        previousWidth: shape.segments.last?.width ?? shape.strokeWidth)
+        previousWidth: shape.segments.last?.width ?? shape.strokeWidth
+      )
     } else {
       segmentWidth = shape.strokeWidth
     }
     if lastPoint != point {
-      shape.add(segment: PenLineSegment(a: lastPoint, b: point, width: segmentWidth))
+        shape.add(segment: PenLineSegment(a: lastPoint, b: point.shapeRelativePoint(drawingSize: context.drawing.size), width: segmentWidth))
     }
     lastVelocity = velocity
   }
@@ -77,10 +78,10 @@ public class PenTool: DrawingTool {
     handleDragEnd(context: context, point: point)
   }
 
-  public func renderShapeInProgress(transientContext: CGContext) {
+  public func renderShapeInProgress(transientContext: CGContext, drawingSize: CGSize) {
     shapeInProgressBuffer = DrawsanaUtilities.renderImage(size: drawingSize) {
       self.shapeInProgressBuffer?.draw(at: .zero)
-      self.shapeInProgress?.renderLatestSegment(in: $0)
+      self.shapeInProgress?.renderLatestSegment(in: $0, drawingSize: drawingSize)
     }
     shapeInProgressBuffer?.draw(at: .zero, blendMode: .normal, alpha: alpha)
   }
@@ -104,7 +105,7 @@ public class EraserTool: PenTool {
     shapeInProgress?.isEraser = true
   }
 
-  public override func renderShapeInProgress(transientContext: CGContext) {
-    shapeInProgress?.renderLatestSegment(in: transientContext)
+  public override func renderShapeInProgress(transientContext: CGContext, drawingSize: CGSize) {
+    shapeInProgress?.renderLatestSegment(in: transientContext, drawingSize: drawingSize)
   }
 }

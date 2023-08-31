@@ -30,6 +30,9 @@ public protocol TextToolDelegate: AnyObject {
   /// the text, you'll need to do some math and apply some inverse scaling
   /// transforms here.
   func textToolDidUpdateEditingViewTransform(_ editingView: TextShapeEditingView, transform: ShapeTransform)
+
+  /// Get current drawing size
+  func drawingSize() -> CGSize
 }
 
 public class TextTool: NSObject, DrawingTool {
@@ -71,6 +74,10 @@ public class TextTool: NSObject, DrawingTool {
     }
   }
 
+  public func renderShapeInProgress(transientContext: CGContext, drawingSize: CGSize) {
+    // Nothing to do
+  }
+
   public func deactivate(context: ToolOperationContext) {
     context.toolSettings.interactiveView?.resignFirstResponder()
     context.toolSettings.interactiveView = nil
@@ -91,7 +98,7 @@ public class TextTool: NSObject, DrawingTool {
     if let dragActionType = editingView.getDragActionType(point: point), case .delete = dragActionType {
       applyRemoveShapeOperation(context: context)
       delegate?.textToolDidTapAway(tappedPoint: point)
-    } else if shape.hitTest(point: point) {
+    } else if shape.hitTest(point: point, drawingSize: context.drawing.size) {
       // TODO: Forward tap to editingView.textView somehow, or manually set
       // the cursor point
     } else {
@@ -110,7 +117,8 @@ public class TextTool: NSObject, DrawingTool {
       let newShape = TextShape()
       newShape.apply(userSettings: context.userSettings)
       self.selectedShape = newShape
-      newShape.transform.translation = delegate?.textToolPointForNewText(tappedPoint: point) ?? point
+      let point = delegate?.textToolPointForNewText(tappedPoint: point) ?? point
+      newShape.transform.translation = point.shapeRelativePoint(drawingSize: context.drawing.size)
       beginEditing(shape: newShape, context: context)
       context.operationStack.apply(operation: AddShapeOperation(shape: newShape))
     }
@@ -121,8 +129,8 @@ public class TextTool: NSObject, DrawingTool {
     if let dragActionType = editingView.getDragActionType(point: point), case .resizeAndRotate = dragActionType {
       dragHandler = ResizeAndRotateHandler(shape: shape, textTool: self)
     } else if let dragActionType = editingView.getDragActionType(point: point), case .changeWidth = dragActionType {
-      dragHandler = ChangeWidthHandler(shape: shape, textTool: self)
-    } else if shape.hitTest(point: point) {
+      dragHandler = ChangeWidthHandler(drawingSize: context.drawing.size, shape: shape, textTool: self)
+    } else if shape.hitTest(point: point, drawingSize: context.drawing.size) {
       dragHandler = MoveHandler(shape: shape, textTool: self)
     } else {
       dragHandler = nil
@@ -188,7 +196,7 @@ public class TextTool: NSObject, DrawingTool {
     // Set selection in an order that guarantees the *initial* selection rect
     // is correct
     selectedShape = shape
-    updateShapeFrame()
+    updateShapeFrame(drawingSize: context.drawing.size)
     context.toolSettings.selectedShape = shape
 
     // Prepare interactive editing view
@@ -228,11 +236,14 @@ public class TextTool: NSObject, DrawingTool {
 
   // MARK: Other helpers
 
-  func updateShapeFrame() {
+  func updateShapeFrame(drawingSize: CGSize) {
     guard let shape = selectedShape else { return }
-    shape.boundingRect = computeBounds()
+
+    let newBoundingRect = computeBounds()
+    shape.size = newBoundingRect.size
+    shape.origin = newBoundingRect.origin.shapeRelativePoint(drawingSize: drawingSize)
+
     // Shape jumps a little after editing unless we add this fudge factor
-    shape.boundingRect.origin.x += 2
     updateTextView()
   }
 
@@ -244,13 +255,14 @@ public class TextTool: NSObject, DrawingTool {
     }
     editingView.textView.font = shape.font
     editingView.textView.textColor = shape.fillColor
-    editingView.bounds = shape.boundingRect
+    editingView.bounds = shape.boundingRect(drawingSize: delegate?.drawingSize() ?? .zero)
     // Fudge factor to make shape and text view line up exactly
     editingView.bounds.size.width += 3
+
     editingView.transform = CGAffineTransform(
-      translationX: -shape.boundingRect.size.width / 2,
-      y: -shape.boundingRect.size.height / 2
-    ).concatenating(shape.transform.affineTransform)
+      translationX: -shape.size.width / 2,
+      y: -shape.size.height / 2
+    ).concatenating(shape.transform.affineTransform(drawingSize: delegate?.drawingSize() ?? .zero))
 
     delegate?.textToolDidUpdateEditingViewTransform(editingView, transform: shape.transform)
 
@@ -277,8 +289,10 @@ public class TextTool: NSObject, DrawingTool {
       return rect
     }
 
+    let drawingSize: CGSize = delegate?.drawingSize() ?? .zero
     // Compute rect final position (ignore scale and rotation as a shortcut)
-    var transformedRect = rect.applying(CGAffineTransform(translationX: shape.transform.translation.x, y: shape.transform.translation.y))
+    let shapeTranslation = shape.transform.translation.shapeRenderingPoint(drawingSize: drawingSize)
+    var transformedRect = rect.applying(CGAffineTransform(translationX: shapeTranslation.x, y: shapeTranslation.y))
 
     // TODO: These calculations are ultimately inaccurate and need to be
     //       revisited.
@@ -290,7 +304,7 @@ public class TextTool: NSObject, DrawingTool {
     }
 
     // Shrink rect if it's too far right
-    transformedRect = rect.applying(CGAffineTransform(translationX: shape.transform.translation.x, y: shape.transform.translation.y))
+    transformedRect = rect.applying(CGAffineTransform(translationX: shape.transform.translation.x * drawingSize.width, y: shape.transform.translation.y * drawingSize.height))
     let widthOverrun = transformedRect.origin.x + transformedRect.size.width - maxWidth
     if widthOverrun > 0 {
       rect.size.width -= widthOverrun
@@ -330,7 +344,7 @@ extension TextTool: UITextViewDelegate {
       shape.text = textView.text ?? ""
     }
     
-    updateShapeFrame()
+    updateShapeFrame(drawingSize: delegate?.drawingSize() ?? .zero)
     // TODO: Only update selection rect here instead of rerendering everything
     shapeUpdater?.rerenderAllShapesInefficiently()
   }

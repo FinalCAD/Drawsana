@@ -23,11 +23,11 @@ public protocol Shape: AnyObject, Codable {
 
   /// Draw this shape to the given Core Graphics context. Transforms for drawing
   /// position and scale are already applied.
-  func render(in context: CGContext)
+  func render(in context: CGContext, drawingSize: CGSize)
 
   /// Return true iff the given point meaningfully intersects with the pixels
   /// drawn by this shape. See `ShapeWithBoundingRect` for a shortcut.
-  func hitTest(point: CGPoint) -> Bool
+  func hitTest(point: CGPoint, drawingSize: CGSize) -> Bool
 
   /// Apply any relevant values in `userSettings` (colors, sizes, fonts...) to
   /// this shape
@@ -39,12 +39,12 @@ public protocol Shape: AnyObject, Codable {
  `boundingRect` property and have `hitTest` implemented automatically.
  */
 public protocol ShapeWithBoundingRect: Shape {
-  var boundingRect: CGRect { get }
+  func boundingRect(drawingSize: CGSize) -> CGRect
 }
 
 extension ShapeWithBoundingRect {
-  public func hitTest(point: CGPoint) -> Bool {
-    return boundingRect.contains(point)
+  public func hitTest(point: CGPoint, drawingSize: CGSize) -> Bool {
+    return boundingRect(drawingSize: drawingSize).contains(point)
   }
 }
 
@@ -67,8 +67,8 @@ public protocol ShapeSelectable: ShapeWithBoundingRect, ShapeWithTransform {
 }
 
 extension ShapeSelectable {
-  public func hitTest(point: CGPoint) -> Bool {
-    return boundingRect.applying(transform.affineTransform).contains(point)
+  public func hitTest(point: CGPoint, drawingSize: CGSize) -> Bool {
+    return boundingRect(drawingSize: drawingSize).applying(transform.affineTransform(drawingSize: drawingSize)).contains(point)
   }
 }
 
@@ -119,7 +119,9 @@ public protocol ShapeWithTwoPoints {
 }
 
 extension ShapeWithTwoPoints {
-  public var rect: CGRect {
+  public func rect(drawingSize: CGSize) -> CGRect {
+    let a = self.a.shapeRenderingPoint(drawingSize: drawingSize)
+    let b = self.b.shapeRenderingPoint(drawingSize: drawingSize)
     let x1 = min(a.x, b.x)
     let y1 = min(a.y, b.y)
     let x2 = max(a.x, b.x)
@@ -127,16 +129,17 @@ extension ShapeWithTwoPoints {
     return CGRect(x: x1, y: y1, width: x2 - x1, height: y2 - y1)
   }
     
-    public var squareRect: CGRect {
+    public func squareRect(drawingSize: CGSize) -> CGRect {
+        let a = self.a.shapeRenderingPoint(drawingSize: drawingSize)
+        let b = self.b.shapeRenderingPoint(drawingSize: drawingSize)
         let width = min(abs(b.x - a.x), abs(b.y - a.y))
         let x = b.x < a.x ? a.x - width : a.x
         let y = b.y < a.y ? a.y - width : a.y
         return CGRect(x: x, y: y, width: width, height: width)
     }
-    
 
-  public var boundingRect: CGRect {
-    return rect.insetBy(dx: -strokeWidth/2, dy: -strokeWidth/2)
+  public func boundingRect(drawingSize: CGSize) -> CGRect {
+    return rect(drawingSize: drawingSize).insetBy(dx: -strokeWidth/2, dy: -strokeWidth/2)
   }
 }
 
@@ -152,7 +155,9 @@ public protocol ShapeWithThreePoints {
 }
 
 extension ShapeWithThreePoints {
-  public var rect: CGRect {
+  public func rect(drawingSize: CGSize) -> CGRect {
+    let a = self.a.shapeRenderingPoint(drawingSize: drawingSize)
+    let b = self.b.shapeRenderingPoint(drawingSize: drawingSize)
     let x1 = min(a.x, b.x, c.x)
     let y1 = min(a.y, b.y, c.y)
     let x2 = max(a.x, b.x, c.x)
@@ -160,7 +165,7 @@ extension ShapeWithThreePoints {
     return CGRect(x: x1, y: y1, width: x2 - x1, height: y2 - y1)
   }
   
-  public var boundingRect: CGRect {
-    return rect.insetBy(dx: -strokeWidth/2, dy: -strokeWidth/2)
+  public func boundingRect(drawingSize: CGSize) -> CGRect {
+    return rect(drawingSize: drawingSize).insetBy(dx: -strokeWidth/2, dy: -strokeWidth/2)
   }
 }

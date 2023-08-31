@@ -86,8 +86,8 @@ public class LineShape:
     try container.encodeIfPresent(dashLengths, forKey: .dashLengths)
   }
 
-  public func render(in context: CGContext) {
-    transform.begin(context: context)
+  public func render(in context: CGContext, drawingSize: CGSize) {
+    transform.begin(context: context, drawingSize: drawingSize)
     context.setLineCap(capStyle)
     context.setLineJoin(joinStyle)
     context.setLineWidth(strokeWidth)
@@ -97,17 +97,17 @@ public class LineShape:
     } else {
       context.setLineDash(phase: 0, lengths: [])
     }
-    context.move(to: a)
-    context.addLine(to: b)
+    context.move(to: a.shapeRenderingPoint(drawingSize: drawingSize))
+    context.addLine(to: b.shapeRenderingPoint(drawingSize: drawingSize))
     context.strokePath()
 
     if case .some(.standard) = arrowStyle {
-      renderArrow(in: context)
+      renderArrow(in: context, drawingSize: drawingSize)
     }
     transform.end(context: context)
   }
 
-  private func renderArrow(in context: CGContext) {
+  private func renderArrow(in context: CGContext, drawingSize: CGSize) {
     let angle = atan2(b.y - a.y, b.x - a.x)
     let arcAmount: CGFloat = CGFloat.pi / 4
     let radius = strokeWidth * 4
@@ -115,9 +115,9 @@ public class LineShape:
     // Nudge arrow out past end of line a little so it doesn't let the line below show through when it's thick
     let arrowOffset = CGPoint(angle: angle, radius: strokeWidth * 2)
 
-    let startPoint = b + arrowOffset
-    let point1 = b + CGPoint(angle: angle + arcAmount / 2 + CGFloat.pi, radius: radius) + arrowOffset
-    let point2 = b + CGPoint(angle: angle - arcAmount / 2 + CGFloat.pi, radius: radius) + arrowOffset
+    let startPoint = b.shapeRenderingPoint(drawingSize: drawingSize) + arrowOffset
+    let point1 = b.shapeRenderingPoint(drawingSize: drawingSize) + CGPoint(angle: angle + arcAmount / 2 + CGFloat.pi, radius: radius) + arrowOffset
+    let point2 = b.shapeRenderingPoint(drawingSize: drawingSize) + CGPoint(angle: angle - arcAmount / 2 + CGFloat.pi, radius: radius) + arrowOffset
 
     context.setLineWidth(0)
     context.setFillColor(strokeColor.cgColor)

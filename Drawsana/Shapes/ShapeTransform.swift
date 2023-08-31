@@ -27,16 +27,17 @@ extension ShapeTransform {
   }
 
   /// Representation of this transform as a `CGAffineTransform`
-  public var affineTransform: CGAffineTransform {
+  public func affineTransform(drawingSize: CGSize) -> CGAffineTransform {
+    let translation = translation.shapeRenderingPoint(drawingSize: drawingSize)
     return CGAffineTransform(translationX: translation.x, y: translation.y)
       .rotated(by: rotation)
       .scaledBy(x: scale, y: scale)
   }
 
   /// Apply this transform in Core Graphics
-  public func begin(context: CGContext) {
+  public func begin(context: CGContext, drawingSize: CGSize) {
     context.saveGState()
-    context.concatenate(affineTransform)
+    context.concatenate(affineTransform(drawingSize: drawingSize))
   }
 
   /// Unapply this transform in Core Graphics (must be paired with exactly one
@@ -47,7 +48,8 @@ extension ShapeTransform {
 
   /// Return a copy of this transform with its translation moved by the given
   /// amount
-  public func translated(by delta: CGPoint) -> ShapeTransform {
+  public func translated(by delta: CGPoint, drawingSize: CGSize) -> ShapeTransform {
+    let delta = delta.shapeRelativePoint(drawingSize: drawingSize)
     return ShapeTransform(
       translation: CGPoint(x: translation.x + delta.x, y: translation.y + delta.y),
       rotation: rotation,

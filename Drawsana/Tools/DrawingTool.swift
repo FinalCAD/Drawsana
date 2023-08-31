@@ -75,7 +75,7 @@ public protocol DrawingTool: AnyObject {
   /// last call. Otherwise, you need to render the whole shape.
   ///
   /// The default implementation does nothing.
-  func renderShapeInProgress(transientContext: CGContext)
+  func renderShapeInProgress(transientContext: CGContext, drawingSize: CGSize)
 }
 // TODO: Should we put these in a base class instead? Do they prevent subclass
 // method overrides from being used in practice?
@@ -83,5 +83,4 @@ public extension DrawingTool {
   func activate(shapeUpdater: DrawsanaViewShapeUpdating, context: ToolOperationContext, shape: Shape?) { }
   func deactivate(context: ToolOperationContext) { }
   func apply(context: ToolOperationContext, userSettings: UserSettings) { }
-  func renderShapeInProgress(transientContext: CGContext) { }
 }

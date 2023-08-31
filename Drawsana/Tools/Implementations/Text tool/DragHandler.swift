@@ -52,7 +52,7 @@ class MoveHandler: DragHandler {
 
   override func handleDragContinue(context: ToolOperationContext, point: CGPoint, velocity: CGPoint) {
     let delta = point - startPoint
-    shape.transform = originalTransform.translated(by: delta)
+    shape.transform = originalTransform.translated(by: delta, drawingSize: context.drawing.size)
     textTool?.updateTextView()
   }
 
@@ -60,14 +60,14 @@ class MoveHandler: DragHandler {
     let delta = CGPoint(x: point.x - startPoint.x, y: point.y - startPoint.y)
     context.operationStack.apply(operation: ChangeTransformOperation(
       shape: shape,
-      transform: originalTransform.translated(by: delta),
+      transform: originalTransform.translated(by: delta, drawingSize: context.drawing.size),
       originalTransform: originalTransform))
   }
 
   override func handleDragCancel(context: ToolOperationContext, point: CGPoint) {
     shape.transform = originalTransform
     context.toolSettings.isPersistentBufferDirty = true
-    textTool?.updateShapeFrame()
+    textTool?.updateShapeFrame(drawingSize: context.drawing.size)
   }
 }
 
@@ -84,9 +84,9 @@ class ResizeAndRotateHandler: DragHandler {
     super.init(shape: shape, textTool: textTool)
   }
 
-  private func getResizeAndRotateTransform(point: CGPoint) -> ShapeTransform {
-    let originalDelta = startPoint - shape.transform.translation
-    let newDelta = point - shape.transform.translation
+  private func getResizeAndRotateTransform(point: CGPoint, drawingSize: CGSize) -> ShapeTransform {
+    let originalDelta = startPoint - shape.transform.translation.shapeRenderingPoint(drawingSize: drawingSize)
+    let newDelta = point - shape.transform.translation.shapeRenderingPoint(drawingSize: drawingSize)
     let originalDistance = originalDelta.length
     let newDistance = newDelta.length
     let originalAngle = atan2(originalDelta.y, originalDelta.x)
@@ -97,21 +97,21 @@ class ResizeAndRotateHandler: DragHandler {
   }
 
   override func handleDragContinue(context: ToolOperationContext, point: CGPoint, velocity: CGPoint) {
-    shape.transform = getResizeAndRotateTransform(point: point)
+    shape.transform = getResizeAndRotateTransform(point: point, drawingSize: context.drawing.size)
     textTool?.updateTextView()
   }
 
   override func handleDragEnd(context: ToolOperationContext, point: CGPoint) {
     context.operationStack.apply(operation: ChangeTransformOperation(
       shape: shape,
-      transform: getResizeAndRotateTransform(point: point),
+      transform: getResizeAndRotateTransform(point: point, drawingSize: context.drawing.size),
       originalTransform: originalTransform))
   }
 
   override func handleDragCancel(context: ToolOperationContext, point: CGPoint) {
     shape.transform = originalTransform
     context.toolSettings.isPersistentBufferDirty = true
-    textTool?.updateShapeFrame()
+    textTool?.updateShapeFrame(drawingSize: context.drawing.size)
   }
 }
 
@@ -120,22 +120,25 @@ class ResizeAndRotateHandler: DragHandler {
 class ChangeWidthHandler: DragHandler {
   private var originalWidth: CGFloat?
   private var originalBoundingRect: CGRect = .zero
+  private let drawingSize: CGSize
 
-  override init(
+  init(
+    drawingSize: CGSize,
     shape: TextShape,
     textTool: TextTool)
   {
     self.originalWidth = shape.explicitWidth
-    self.originalBoundingRect = shape.boundingRect
+    self.drawingSize = drawingSize
+    self.originalBoundingRect = shape.boundingRect(drawingSize: drawingSize)
     super.init(shape: shape, textTool: textTool)
-    shape.explicitWidth = shape.explicitWidth ?? shape.boundingRect.size.width
+    shape.explicitWidth = shape.explicitWidth ?? shape.size.width
   }
 
   override func handleDragContinue(context: ToolOperationContext, point: CGPoint, velocity: CGPoint) {
     guard let textTool = textTool else { return }
-    let translatedBoundingRect = shape.boundingRect.applying(
-      CGAffineTransform(translationX: shape.transform.translation.x,
-                        y: shape.transform.translation.y))
+    let translatedBoundingRect = shape
+      .boundingRect(drawingSize: drawingSize)
+      .applying(shape.transform.affineTransform(drawingSize: context.drawing.size))
     // TODO: The math here isn't quite right. Instead of using the distance from
     // the center of the shape, we should use only the distance to the center of
     // the text on the X axis in the text's coordinate space. This isn't too
@@ -145,7 +148,7 @@ class ChangeWidthHandler: DragHandler {
     let desiredWidthInScreenCoordinates = (
       distanceFromShapeCenter - textTool.editingView.changeWidthControlView.frame.size.width / 2) * 2
     shape.explicitWidth = desiredWidthInScreenCoordinates / shape.transform.scale
-    textTool.updateShapeFrame()
+    textTool.updateShapeFrame(drawingSize: context.drawing.size)
   }
 
   override func handleDragEnd(context: ToolOperationContext, point: CGPoint) {
@@ -154,12 +157,13 @@ class ChangeWidthHandler: DragHandler {
       originalWidth: originalWidth,
       originalBoundingRect: originalBoundingRect,
       newWidth: shape.explicitWidth,
-      newBoundingRect: shape.boundingRect))
+      newBoundingRect: shape.boundingRect(drawingSize: drawingSize)))
   }
 
   override func handleDragCancel(context: ToolOperationContext, point: CGPoint) {
     shape.explicitWidth = originalWidth
-    shape.boundingRect = originalBoundingRect
+    shape.size = originalBoundingRect.size
+    shape.origin = originalBoundingRect.origin.shapeRelativePoint(drawingSize: context.drawing.size)
     context.toolSettings.isPersistentBufferDirty = true
     textTool?.updateTextView()
   }
