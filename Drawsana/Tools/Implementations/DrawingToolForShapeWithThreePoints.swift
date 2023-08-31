@@ -37,9 +37,9 @@ open class DrawingToolForShapeWithThreePoints: DrawingTool {
   public func handleDragStart(context: ToolOperationContext, point: CGPoint) {
     if dragEndCount == 0 {
       shapeInProgress = makeShape()
-      shapeInProgress?.a = point
-      shapeInProgress?.b = point
-      shapeInProgress?.c = point
+      shapeInProgress?.a = point.shapeRelativePoint(drawingSize: context.drawing.size)
+      shapeInProgress?.b = point.shapeRelativePoint(drawingSize: context.drawing.size)
+      shapeInProgress?.c = point.shapeRelativePoint(drawingSize: context.drawing.size)
       shapeInProgress?.apply(userSettings: context.userSettings)
       return
     }
@@ -48,21 +48,21 @@ open class DrawingToolForShapeWithThreePoints: DrawingTool {
   
   public func handleDragContinue(context: ToolOperationContext, point: CGPoint, velocity: CGPoint) {
     if dragEndCount == 0 {
-      shapeInProgress?.b = point
+      shapeInProgress?.b = point.shapeRelativePoint(drawingSize: context.drawing.size)
       return
     }
-    shapeInProgress?.c = point
+    shapeInProgress?.c = point.shapeRelativePoint(drawingSize: context.drawing.size)
   }
   
   public func handleDragEnd(context: ToolOperationContext, point: CGPoint) {
     guard var shape = shapeInProgress else { return }
     if dragEndCount == 0 {
       dragEndCount += 1
-      shape.b = point
+      shape.b = point.shapeRelativePoint(drawingSize: context.drawing.size)
       context.operationStack.apply(operation: AddShapeOperation(shape: shape))
       return
     }
-    shape.c = point
+    shape.c = point.shapeRelativePoint(drawingSize: context.drawing.size)
     context.operationStack.undo()
     context.operationStack.apply(operation: AddShapeOperation(shape: shape))
     dragEndCount = 0
@@ -75,8 +75,8 @@ open class DrawingToolForShapeWithThreePoints: DrawingTool {
     handleDragEnd(context: context, point: point)
   }
   
-  public func renderShapeInProgress(transientContext: CGContext) {
-    shapeInProgress?.render(in: transientContext)
+  public func renderShapeInProgress(transientContext: CGContext, drawingSize: CGSize) {
+    shapeInProgress?.render(in: transientContext, drawingSize: drawingSize)
   }
   
   public func apply(context: ToolOperationContext, userSettings: UserSettings) {

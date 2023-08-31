@@ -81,8 +81,8 @@ public class AngleShape:
     try container.encodeIfPresent(dashLengths, forKey: .dashLengths)
   }
   
-  public func render(in context: CGContext) {
-    transform.begin(context: context)
+  public func render(in context: CGContext, drawingSize: CGSize) {
+    transform.begin(context: context, drawingSize: drawingSize)
     context.setLineCap(capStyle)
     context.setLineJoin(joinStyle)
     context.setLineWidth(strokeWidth)

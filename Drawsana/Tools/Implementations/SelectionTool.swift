@@ -50,6 +50,10 @@ public class SelectionTool: DrawingTool {
     context.toolSettings.selectedShape = nil
   }
 
+    public func renderShapeInProgress(transientContext: CGContext, drawingSize: CGSize) {
+        // Nothing to do
+    }
+
   public func apply(context: ToolOperationContext, userSettings: UserSettings) {
     if let shape = context.toolSettings.selectedShape {
       if isUpdatingSelection {
@@ -69,7 +73,7 @@ public class SelectionTool: DrawingTool {
   }
 
   public func handleTap(context: ToolOperationContext, point: CGPoint) {
-    if let selectedShape = context.toolSettings.selectedShape, selectedShape.hitTest(point: point) == true {
+    if let selectedShape = context.toolSettings.selectedShape, selectedShape.hitTest(point: point, drawingSize: context.drawing.size) == true {
       if let delegate = delegate {
         delegate.selectionToolDidTapOnAlreadySelectedShape(selectedShape)
       } else {
@@ -81,12 +85,12 @@ public class SelectionTool: DrawingTool {
 
     updateSelection(context: context, context.drawing.shapes
       .compactMap({ $0 as? ShapeSelectable })
-      .filter({ $0.hitTest(point: point) })
+      .filter({ $0.hitTest(point: point, drawingSize: context.drawing.size) })
       .last)
   }
 
   public func handleDragStart(context: ToolOperationContext, point: CGPoint) {
-    guard let selectedShape = context.toolSettings.selectedShape, selectedShape.hitTest(point: point) else {
+    guard let selectedShape = context.toolSettings.selectedShape, selectedShape.hitTest(point: point, drawingSize: context.drawing.size) else {
       isDraggingShape = false
       return
     }
@@ -106,7 +110,7 @@ public class SelectionTool: DrawingTool {
       return
     }
     let delta = CGPoint(x: point.x - startPoint.x, y: point.y - startPoint.y)
-    selectedShape.transform = originalTransform.translated(by: delta)
+    selectedShape.transform = originalTransform.translated(by: delta, drawingSize: context.drawing.size)
     context.toolSettings.isPersistentBufferDirty = true
   }
 
@@ -123,7 +127,7 @@ public class SelectionTool: DrawingTool {
     let delta = CGPoint(x: point.x - startPoint.x, y: point.y - startPoint.y)
     context.operationStack.apply(operation: ChangeTransformOperation(
       shape: selectedShape,
-      transform: originalTransform.translated(by: delta),
+      transform: originalTransform.translated(by: delta, drawingSize: context.drawing.size),
       originalTransform: originalTransform))
     context.toolSettings.isPersistentBufferDirty = true
     isDraggingShape = false

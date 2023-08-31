@@ -33,8 +33,8 @@ public class NgonShape:
     public var transform: ShapeTransform = .identity
     public var sides: Int!
 
-    public var boundingRect: CGRect {
-        return squareRect
+    public func boundingRect(drawingSize: CGSize) -> CGRect {
+        return squareRect(drawingSize: drawingSize)
     }
     
     public init(_ sides: Int) {
@@ -91,8 +91,10 @@ public class NgonShape:
         try container.encodeIfPresent(dashLengths, forKey: .dashLengths)
     }
     
-    public func render(in context: CGContext) {
-        transform.begin(context: context)
+    public func render(in context: CGContext, drawingSize: CGSize) {
+        transform.begin(context: context, drawingSize: drawingSize)
+
+        let squareRect = self.squareRect(drawingSize: drawingSize)
         
         if let fillColor = fillColor {
             context.setFillColor(fillColor.cgColor)

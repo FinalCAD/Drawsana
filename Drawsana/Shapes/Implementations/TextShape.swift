@@ -11,7 +11,7 @@ import UIKit
 public class TextShape: Shape, ShapeSelectable {
   private enum CodingKeys: String, CodingKey {
     case id, transform, text, fontName, fontSize, fillColor, type,
-      explicitWidth, boundingRect
+      explicitWidth, origin, size
   }
 
   public static let type = "Text"
@@ -32,7 +32,10 @@ public class TextShape: Shape, ShapeSelectable {
   /// `UITextView` that the user is editing.
   public var isBeingEdited: Bool = false
 
-  public var boundingRect: CGRect = .zero
+  // Origin coordinate are in relative coordinates, so the origin is always the same if rotates
+  var origin: CGPoint = .zero
+  // That isn't relative as too complex with text
+  var size: CGSize = .zero
 
   var font: UIFont {
     return UIFont(name: fontName, size: fontSize)!
@@ -55,10 +58,11 @@ public class TextShape: Shape, ShapeSelectable {
     fontSize = try values.decode(CGFloat.self, forKey: .fontSize)
     fillColor = UIColor(hexString: try values.decode(String.self, forKey: .fillColor))
     explicitWidth = try values.decodeIfPresent(CGFloat.self, forKey: .explicitWidth)
-    boundingRect = try values.decodeIfPresent(CGRect.self, forKey: .boundingRect) ?? .zero
+    origin = try values.decodeIfPresent(CGPoint.self, forKey: .origin) ?? .zero
+    size = try values.decodeIfPresent(CGSize.self, forKey: .size) ?? .zero
     transform = try values.decode(ShapeTransform.self, forKey: .transform)
 
-    if boundingRect == .zero {
+    if size == .zero {
       print("Text bounding rect not present. This shape will not render correctly because of a bug in Drawsana <0.10.0.")
     }
   }
@@ -73,14 +77,16 @@ public class TextShape: Shape, ShapeSelectable {
     try container.encode(fontSize, forKey: .fontSize)
     try container.encodeIfPresent(explicitWidth, forKey: .explicitWidth)
     try container.encode(transform, forKey: .transform)
-    try container.encode(boundingRect, forKey: .boundingRect)
+    try container.encode(size, forKey: .size)
+    try container.encode(origin, forKey: .origin)
   }
 
-  public func render(in context: CGContext) {
+  public func render(in context: CGContext, drawingSize: CGSize) {
     if isBeingEdited { return }
-    transform.begin(context: context)
+    transform.begin(context: context, drawingSize: drawingSize)
+
     (self.text as NSString).draw(
-      in: CGRect(origin: boundingRect.origin, size: self.boundingRect.size),
+      in: self.boundingRect(drawingSize: drawingSize),
       withAttributes: [
         .font: self.font,
         .foregroundColor: self.fillColor,
@@ -92,5 +98,9 @@ public class TextShape: Shape, ShapeSelectable {
     fillColor = userSettings.strokeColor ?? .black
     fontName = userSettings.fontName
     fontSize = userSettings.fontSize
+  }
+
+  public func boundingRect(drawingSize: CGSize) -> CGRect {
+    return CGRect(origin: origin.shapeRenderingPoint(drawingSize: drawingSize), size: size)
   }
 }

@@ -146,13 +146,13 @@ public class Drawing: Codable {
   }
 
   public func getShape(at point: CGPoint, filter: ((Shape) -> Bool)? = nil) -> Shape? {
-    return shapes.filter({ $0.hitTest(point: point) && filter?($0) != false }).first
+    return shapes.filter({ $0.hitTest(point: point, drawingSize: size) && filter?($0) != false }).first
   }
 
   public func getShape<T: Shape>(of type: T.Type, at point: CGPoint, filter: ((Shape) -> Bool)? = nil) -> T? {
     return shapes
       .compactMap({ $0 as? T })
-      .filter({ $0.hitTest(point: point) })
+      .filter({ $0.hitTest(point: point, drawingSize: size) })
       .filter({ filter?($0) != false }).first
   }
 }

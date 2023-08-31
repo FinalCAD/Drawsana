@@ -117,23 +117,6 @@ public class DrawsanaView: UIView {
 
   private let drawingContentView = UIView()
 
-  /// View which is moved around to match the frame of the selected shape.
-  /// You may configure whatever properties you want to to make it look like
-  /// you want it to look.
-  public let selectionIndicatorView = UIView()
-    
-
-  /// Offset for the selection Indicatior, because it is placed relative to the anchorPoint.
-  /// You should only have to change this if your anchorPoint is different from the default (0.5, 0.5)
-  public var selectionIndicatorAnchorPointOffset = CGPoint(x: 0.5, y: 0.5)
-
-  /// Layer that backs `DrawsanaView.selectionIndicatorView`. You may set this
-  /// layer's properties to change its visual apparance. Its `path` and `frame`
-  /// properties are managed by `DrawsanaView`.
-  public var selectionIndicatorViewShapeLayer: CAShapeLayer {
-    return selectionIndicatorView.layer.sublayers!.compactMap({ $0 as? CAShapeLayer }).first!
-  }
-
   private let interactiveOverlayContainerView = UIView()
 
   // MARK: Init
@@ -159,15 +142,8 @@ public class DrawsanaView: UIView {
     layer.actions = [
       "contents": NSNull(),
     ]
-    selectionIndicatorView.layer.actions = [
-      "transform": NSNull(),
-      "lineWidth": NSNull(),
-      "lineDashPattern": NSNull(),
-      "cornerRadius": NSNull(),
-    ]
 
     addSubview(drawingContentView)
-    addSubview(selectionIndicatorView)
     addSubview(interactiveOverlayContainerView)
 
     drawingContentView.translatesAutoresizingMaskIntoConstraints = false
@@ -186,26 +162,6 @@ public class DrawsanaView: UIView {
       interactiveOverlayContainerView.bottomAnchor.constraint(equalTo: bottomAnchor),
     ])
 
-    selectionIndicatorView.translatesAutoresizingMaskIntoConstraints = true
-    // This autoresizing mask makes selection indincator positionign work
-    // correctly. It's not clear why, though, since we're explicitly positioning
-    // and transforming the view outside of AutoLayout.
-    selectionIndicatorView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-
-    let selectionLayer = CAShapeLayer()
-    selectionLayer.strokeColor = UIColor.black.cgColor
-    selectionLayer.lineWidth = 2
-    selectionLayer.lineDashPattern = [4, 4]
-    selectionLayer.fillColor = nil
-    selectionLayer.frame = selectionIndicatorView.bounds
-    selectionLayer.path = UIBezierPath(rect: selectionIndicatorView.bounds).cgPath
-    selectionIndicatorView.layer.addSublayer(selectionLayer)
-    selectionIndicatorView.layer.shadowColor = UIColor.white.cgColor
-    selectionIndicatorView.layer.shadowOffset = .zero
-    selectionIndicatorView.layer.shadowRadius = 1
-    selectionIndicatorView.layer.shadowOpacity = 1
-    selectionIndicatorView.isHidden = true
-
     let panGR = ImmediatePanGestureRecognizer(target: self, action: #selector(didPan(sender:)))
     addGestureRecognizer(panGR)
   }
@@ -214,8 +170,36 @@ public class DrawsanaView: UIView {
     super.layoutSubviews()
     drawing.size = frame.size
 
-    // Buffers may not be sized correctly
+    // Buffers may not be sized correctly, as selection
     redrawAbsolutelyEverything()
+    applySelectionViewState()
+  }
+
+  public override func draw(_ rect: CGRect) {
+    super.draw(rect)
+
+    guard let shape = toolSettings.selectedShape, let context = UIGraphicsGetCurrentContext() else {
+      return
+    }
+
+    // Render selection by drawing bezier path at the coordinates of the shape
+    // Using this is way easier than before as it allows to use same coordinate space (with transform) without maths & fix weird bug with autoresizingMask affecting position after rotation
+    shape.transform.begin(context: context, drawingSize: drawing.size)
+
+    // First, get the size and bounding rect position of the selected shape
+    let shapeBoundingRect = shape.boundingRect(drawingSize: drawing.size).insetBy(
+      dx: selectionIndicatorInset.x,
+      dy: selectionIndicatorInset.y
+    )
+
+    // Generate path and draw the selection area
+    let path = UIBezierPath(rect: shapeBoundingRect)
+    UIColor.black.setStroke()
+    path.lineWidth = 2
+    path.setLineDash([4, 4], count: 2, phase: 0)
+    path.stroke()
+
+    shape.transform.end(context: context)
   }
 
   // MARK: API
@@ -241,7 +225,10 @@ public class DrawsanaView: UIView {
   /// The scale parameter defines wether image is rendered at the device's native resolution (scale = 0.0)
   /// or to scale it to the image size (scale 1.0). Use scale = 0.0 when rendering to display on screen and
   /// 1.0 if you are saving the image to a file
-    public func render(over image: UIImage?, scale:CGFloat = 0.0) -> UIImage? {
+  public func render(over image: UIImage?, scale: CGFloat = 0.0) -> UIImage? {
+    // Deactivate current tool
+    tool?.deactivate(context: toolOperationContext)
+
     let size = image?.size ?? drawing.size
     let shapesImage = render(size: size, scale: scale)
     return DrawsanaUtilities.renderImage(size: size, scale: scale) { (context: CGContext) -> Void in
@@ -252,15 +239,18 @@ public class DrawsanaView: UIView {
 
   /// Render the drawing. If you pass a size, shapes are re-scaled to be full
   /// resolution at that size, otherwise the view size is used.
-    public func render(size: CGSize? = nil, scale:CGFloat = 0.0) -> UIImage? {
+  public func render(size: CGSize? = nil, scale:CGFloat = 0.0) -> UIImage? {
+    // Deactivate current tool
+    tool?.deactivate(context: toolOperationContext)
+
     let size = size ?? drawing.size
-        return DrawsanaUtilities.renderImage(size: size, scale:scale) { (context: CGContext) -> Void in
+    return DrawsanaUtilities.renderImage(size: size, scale:scale) { (context: CGContext) -> Void in
       context.saveGState()
       context.scaleBy(
         x: size.width / self.drawing.size.width,
         y: size.height / self.drawing.size.height)
       for shape in self.drawing.shapes {
-        shape.render(in: context)
+        shape.render(in: context, drawingSize: drawing.size)
       }
       context.restoreGState()
     }
@@ -278,7 +268,7 @@ public class DrawsanaView: UIView {
     let updateUncommittedShapeBuffers: () -> Void = {
       self.transientBufferWithShapeInProgress = DrawsanaUtilities.renderImage(size: self.drawing.size) {
         self.transientBuffer?.draw(at: .zero)
-        self.tool?.renderShapeInProgress(transientContext: $0)
+        self.tool?.renderShapeInProgress(transientContext: $0, drawingSize: self.drawing.size)
       }
       self.drawingContentView.layer.contents = self.transientBufferWithShapeInProgress?.cgImage
       if self.tool?.isProgressive == true {
@@ -341,61 +331,25 @@ public class DrawsanaView: UIView {
   }
 
   private func applySelectionViewState() {
-    guard let shape = toolSettings.selectedShape else {
-      selectionIndicatorView.isHidden = true
-      return
-    }
-
-    // Warning: hand-wavy math ahead
-
-    // First, get the size and bounding rect position of the selected shape
-    var selectionBounds = shape.boundingRect.insetBy(
-      dx: selectionIndicatorInset.x,
-      dy: selectionIndicatorInset.y)
-    let offset = selectionBounds.origin
-
-    // Next, we're going to remove the position from the bounding rect so we
-    // can use it as UIView.bounds.
-    selectionBounds.origin = .zero
-    selectionIndicatorView.bounds = selectionBounds
-
-    /**
-     Now for the hand-wavy part. We're positioning a UIView using `transform`
-     and `bounds`, NOT `frame`! It is not valid to set both `transform` and
-     `frame` at the same time. (https://developer.apple.com/documentation/uikit/uiview/1622459-transform)
-
-     Unfortunately, this means that we're now positioning relative to the
-     parent layer's anchor point at (0.5, 0.5) in the middle of the view,
-     rather than the upper left of the view.
-
-     Shapes are positioned using BOTH `boundingRect` AND `transform`! So we need
-     to add `offset` from above with `shape.transform.translation` to arrive
-     at the right final translation.
-     */
-    selectionIndicatorView.transform = ShapeTransform(
-      translation: (
-        // figure out where the shape is in space
-        offset + shape.transform.translation +
-        // Account for the coordinate system being anchored in the middle
-        CGPoint(x: -bounds.size.width * selectionIndicatorAnchorPointOffset.x, y: -bounds.size.height * selectionIndicatorAnchorPointOffset.y) +
-        // We've just moved the CENTER of the selection view to the UPPER LEFT
-        // of the shape, so adjust by half the selection size:
-        CGPoint(x: selectionBounds.size.width / 2, y: selectionBounds.size.height / 2)),
-      rotation: shape.transform.rotation,
-      scale: shape.transform.scale).affineTransform
-    selectionIndicatorView.isHidden = false
-
-    selectionIndicatorViewShapeLayer.frame = selectionIndicatorView.bounds
-    selectionIndicatorViewShapeLayer.path = UIBezierPath(rect: selectionIndicatorView.bounds).cgPath
+    setNeedsDisplay()
   }
 
   private func redrawAbsolutelyEverything() {
     persistentBuffer = DrawsanaUtilities.renderImage(size: drawing.size) {
       for shape in self.drawing.shapes {
-        shape.render(in: $0)
+        shape.render(in: $0, drawingSize: self.drawing.size)
       }
     }
     reapplyLayerContents()
+  }
+
+  public func handleOrientationChange() {
+    // Deactivate current tool, especialluy for text
+    tool?.deactivate(context: toolOperationContext)
+
+    // Enforce layout and display
+    setNeedsLayout()
+    setNeedsDisplay()
   }
 }
 
@@ -415,7 +369,7 @@ extension DrawsanaView: DrawingDelegate {
   func drawingDidAddShape(_ shape: Shape) {
     persistentBuffer = DrawsanaUtilities.renderImage(size: drawing.size) {
       self.persistentBuffer?.draw(at: .zero)
-      shape.render(in: $0)
+      shape.render(in: $0, drawingSize: self.drawing.size)
     }
     reapplyLayerContents()
   }

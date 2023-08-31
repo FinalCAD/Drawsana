@@ -32,10 +32,6 @@ public class StarShape:
     public var dashLengths: [CGFloat]?
     public var transform: ShapeTransform = .identity
     
-    public var boundingRect: CGRect {
-        return squareRect
-    }
-    
     public init() {
         
     }
@@ -87,10 +83,16 @@ public class StarShape:
         try container.encodeIfPresent(dashPhase, forKey: .dashPhase)
         try container.encodeIfPresent(dashLengths, forKey: .dashLengths)
     }
-    
-    public func render(in context: CGContext) {
-        transform.begin(context: context)
-        
+
+    public func boundingRect(drawingSize: CGSize) -> CGRect {
+        return squareRect(drawingSize: drawingSize)
+    }
+
+    public func render(in context: CGContext, drawingSize: CGSize) {
+        transform.begin(context: context, drawingSize: drawingSize)
+
+        let squareRect = self.squareRect(drawingSize: drawingSize)
+
         if let fillColor = fillColor {
             context.setFillColor(fillColor.cgColor)
             context.addPath(starPath(x: squareRect.midX, y: squareRect.midY, radius: (squareRect.width - strokeWidth)/4, sides: 5, pointyness: 2.5,startAngle: 54))    // star

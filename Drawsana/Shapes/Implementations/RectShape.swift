@@ -82,8 +82,10 @@ public class RectShape:
     try container.encodeIfPresent(dashLengths, forKey: .dashLengths)
   }
 
-  public func render(in context: CGContext) {
-    transform.begin(context: context)
+  public func render(in context: CGContext, drawingSize: CGSize) {
+    transform.begin(context: context, drawingSize: drawingSize)
+
+    let rect = self.rect(drawingSize: drawingSize)
 
     if let fillColor = fillColor {
       context.setFillColor(fillColor.cgColor)
